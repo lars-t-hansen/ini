@@ -8,7 +8,7 @@ import (
 // TODO: Quotes
 
 func TestGood(t *testing.T) {
-	p := NewIniParser()
+	p := NewParser()
 
 	sStrings := p.AddSection("strings")
 	if p.Section("strings") != sStrings {
@@ -58,7 +58,7 @@ func TestGood(t *testing.T) {
 	sUser := p.AddSection("user-defined-types")
 	u1 := sUser.Add("vowel", TyUser, func(s string) (any, bool) {
 		switch s {
-		case "a","e","i","o","y":
+		case "a", "e", "i", "o", "y":
 			return true, true
 		default:
 			return false, len(s) == 1
@@ -72,7 +72,7 @@ func TestGood(t *testing.T) {
 	}
 	u2 := sUser.Add("consonant", TyUser+1, func(s string) (any, bool) {
 		switch s {
-		case "a","e","i","o","y":
+		case "a", "e", "i", "o", "y":
 			return false, true
 		default:
 			if len(s) != 1 {
@@ -84,6 +84,9 @@ func TestGood(t *testing.T) {
 	if u2.Type() != TyUser+1 {
 		t.Fatal("consonant type")
 	}
+
+	sOther := p.AddSection("other")
+	sEmpty := p.AddSection("empty")
 
 	f, err := os.Open("testdata/simple.ini")
 	if err != nil {
@@ -107,5 +110,32 @@ func TestGood(t *testing.T) {
 	}
 	if x := uf.Uint64Val(store); x != 17 {
 		t.Fatal("u: ", x)
+	}
+	if x := ff.Float64Val(store); x != 13.5e+7 {
+		t.Fatal("f: ", x)
+	}
+	if x := ff.Present(store); !x {
+		t.Fatal("f: ", x)
+	}
+	if x := bf.BoolVal(store); x {
+		t.Fatal("b: ", x)
+	}
+	if x := sBools.Field("implicit").BoolVal(store); !x {
+		t.Fatal("implicit: ", x)
+	}
+	if x := sUser.Present(store); !x {
+		t.Fatal("user-defined-types present")
+	}
+	if x, _ := u1.Value(store); !x.(bool) {
+		t.Fatal("vowel: ", x)
+	}
+	if x, _ := u2.Value(store); !x.(bool) {
+		t.Fatal("consonant: ", x)
+	}
+	if x := sOther.Present(store); x {
+		t.Fatal("other is present")
+	}
+	if x := sEmpty.Present(store); !x {
+		t.Fatal("empty is not present")
 	}
 }

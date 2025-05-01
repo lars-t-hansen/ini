@@ -1,3 +1,3 @@
-module ini
+module github.com/lars-t-hansen/ini
 
-go 1.24.2
+go 1.23.0
