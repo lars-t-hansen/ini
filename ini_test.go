@@ -6,6 +6,9 @@ import (
 )
 
 // TODO: Quotes
+// TODO: unusual defaults for standard types
+// TODO: user types in a better way (try string list)
+// TODO: default values for user types
 
 func TestGood(t *testing.T) {
 	p := NewParser()
@@ -56,7 +59,7 @@ func TestGood(t *testing.T) {
 	sBools.AddBool("implicit")
 
 	sUser := p.AddSection("user-defined-types")
-	u1 := sUser.Add("vowel", TyUser, func(s string) (any, bool) {
+	u1 := sUser.Add("vowel", TyBool, false, func(s string) (any, bool) {
 		switch s {
 		case "a", "e", "i", "o", "y":
 			return true, true
@@ -67,10 +70,10 @@ func TestGood(t *testing.T) {
 	if u1.Name() != "vowel" {
 		t.Fatal("vowel name")
 	}
-	if u1.Type() != TyUser {
+	if u1.Type() != TyBool {
 		t.Fatal("vowel type")
 	}
-	u2 := sUser.Add("consonant", TyUser+1, func(s string) (any, bool) {
+	u2 := sUser.Add("consonant", TyBool, false, func(s string) (any, bool) {
 		switch s {
 		case "a", "e", "i", "o", "y":
 			return false, true
@@ -81,7 +84,7 @@ func TestGood(t *testing.T) {
 			return s >= "a" && s <= "z", true
 		}
 	})
-	if u2.Type() != TyUser+1 {
+	if u2.Type() != TyBool {
 		t.Fatal("consonant type")
 	}
 
@@ -94,7 +97,8 @@ func TestGood(t *testing.T) {
 	}
 	defer f.Close()
 
-	store, err := p.Parse(f)
+	var store *Store
+	store, err = p.Parse(f)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,10 +130,10 @@ func TestGood(t *testing.T) {
 	if x := sUser.Present(store); !x {
 		t.Fatal("user-defined-types present")
 	}
-	if x, _ := u1.Value(store); !x.(bool) {
+	if x := u1.BoolVal(store); !x {
 		t.Fatal("vowel: ", x)
 	}
-	if x, _ := u2.Value(store); !x.(bool) {
+	if x := u2.BoolVal(store); !x {
 		t.Fatal("consonant: ", x)
 	}
 	if x := sOther.Present(store); x {
