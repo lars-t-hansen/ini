@@ -1,26 +1,28 @@
-// TODO:
-// - document that we can use Add for new types but also for unusual defaults for existing types and for
-//   parsing unusual values into predefined types
+// TODO doc:
+// - conformant documentation
+// - examples
 
 // Package ini implements a generic, simple ini file parser.
 //
 // # Syntax
 //
 // An ini file is line oriented.  It has a number of sections, each starting with a `[section-name]`
-// header.  Within each section is a sequence of fields, each on the form `name=value`.  Blank lines
-// are ignored.  Lines whose first nonblank is CommentChar (default '#') are ignored.  There can be
-// blanks at the beginning and end of all lines and on either side of the `=`, and inside the braces
-// of the header.  Section and field names must conform to `[a-zA-Z0-9-_]+`, and are case-sensitive.
+// header.  Within each section is a sequence of field settings, each on the form `name=value`.
+// Blank lines are ignored.  Lines whose first nonblank is CommentChar (default '#') are ignored.
+// There can be blanks at the beginning and end of all lines and on either side of the `=`, and
+// inside the braces of the header. Section and field names must conform to `[a-zA-Z0-9-_]+`, and
+// are case-sensitive.
 //
-// The fields are typed, the value must conform to the type.  Values can be quoted with matching
-// quotes according to QuoteChar (default '"'), the quotes are stripped.  Set QuoteChar to ' ' to
-// disable all quote stripping.  Leading and trailing blanks of the value (outside any quotes) are
-// always stripped.
+// The fields are typed, the value must conform to the type, though blank values are accepted for
+// strings (empty string) and booleans (true).  Values can be quoted with matching quotes according
+// to QuoteChar (default '"'), the quotes are stripped.  Set QuoteChar to ' ' to disable all quote
+// stripping.  Leading and trailing blanks of the value (outside any quotes) are always stripped.
 //
 // # Usage
 //
-// Create an ini parser with `NewParser()` and customize any variables.  Then add sections to it
-// with `AddSection()`.  Add fields to each section with `AddField<Type>()`.
+// Create an ini parser with NewParser() and customize any variables.  Then add sections to it with
+// AddSection().  Add fields to each section with Add<Type>() for pre-defined types or the general
+// Add() for user-defined types or non-standard default values or parsing.
 //
 // Parse an input stream with the parser's `Parse()` method.  This will return a `Store` (or an
 // error).  Access field values via the Field objects on the Store, or directly on the Store itself.
@@ -188,10 +190,10 @@ func ParseFloat64(s string) (any, bool) {
 	return v, true
 }
 
-// Add a custom (user-defined) field of the given name to the section.  The `ty` can be a defined
-// type if that is the representation of the value, or it must be >= TyUser to indicate something
-// non-standard.  The `valid` function will take a string and return a parsed value and true if the
-// value is good, otherwise an arbitrary value and false.
+// Add a field of the given name and default value to the section.  The `ty` can be a pre-defined
+// type tag if that is the representation of the value, or it must be >= TyUser to indicate
+// something non-standard.  The `valid` function will take a string and return a parsed value and
+// true if the value is good, otherwise an arbitrary value and false.
 func (section *Section) Add(name string, ty FieldTy, defaultValue any, valid func(s string) (any, bool)) *Field {
 	if !nameRe.MatchString(name) {
 		panic("Invalid field name " + name)
@@ -351,8 +353,7 @@ func (store *Store) set(section *Section, field *Field, val any) {
 func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 	names := slices.Collect(maps.Keys(parser.sections))
 	sectionRe := regexp.MustCompile(`^\s*\[\s*(` + strings.Join(names, "|") + `)\s*\]\s*$`)
-	// TODO: Must escape that char somehow
-	blankRe := regexp.MustCompile(fmt.Sprintf(`^\s*(:?%c.*)?$`, parser.CommentChar))
+	blankRe := regexp.MustCompile(fmt.Sprintf(`^\s*(:?\x{%x}.*)?$`, parser.CommentChar))
 
 	store := &Store{
 		sections: make(map[string]*sectStore),
@@ -385,8 +386,10 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 			}
 			s := strings.TrimSpace(m[2])
 			if parser.QuoteChar != ' ' {
-				// TODO: Quote stripping, note we may need to do the whole rune, and only if both
-				// first and last match.
+				c := string(parser.QuoteChar)
+				if strings.HasPrefix(s, c) && strings.HasSuffix(s, c) {
+					s = strings.TrimSuffix(strings.TrimPrefix(s, c), c)
+				}
 			}
 			val, valid := field.valid(s)
 			if !valid {
@@ -400,7 +403,9 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 		}
 		return nil, parseFail(lineno, sect.name, "Invalid syntax")
 	}
-	// TODO: check scanner error
+	if err := scanner.Err(); err != nil {
+		return nil, parseFail(lineno, "", "I/O error: " + err.Error())
+	}
 
 	return store, nil
 }

@@ -2,13 +2,14 @@ package ini
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
-// TODO: Quotes
 // TODO: unusual defaults for standard types
 // TODO: user types in a better way (try string list)
 // TODO: default values for user types
+// TODO: error cases
 
 func TestGood(t *testing.T) {
 	p := NewParser()
@@ -141,5 +142,123 @@ func TestGood(t *testing.T) {
 	}
 	if x := sEmpty.Present(store); !x {
 		t.Fatal("empty is not present")
+	}
+}
+
+// '(' is a regexp metachar so this test tests that it is escaped properly in the parser in addition
+// to testing that custom comment chars work at all.
+
+func TestComment(t *testing.T) {
+	p := NewParser()
+	s := p.AddSection("sect")
+	s.AddInt64("x")
+	s.AddInt64("y")
+	p.CommentChar = '('
+	store, err := p.Parse(strings.NewReader(`
+( this is a comment
+( this too
+[ sect ]
+x = 10
+( more comment, next line is blank
+
+y = 20
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Field("x").Int64Val(store) != 10 {
+		t.Fatal("x")
+	}
+	if s.Field("y").Int64Val(store) != 20 {
+		t.Fatal("y")
+	}
+
+	// Comment char can be changed right before parse, even after a previous parse
+	p.CommentChar = ';'
+	store, err = p.Parse(strings.NewReader(`
+; this is a comment
+[ sect ]
+x = 12
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Field("x").Int64Val(store) != 12 {
+		t.Fatal("x")
+	}
+}
+
+func TestQuote(t *testing.T) {
+	p := NewParser()
+	s := p.AddSection("sect")
+	s.AddInt64("x")
+	s.AddString("s")
+	store, err := p.Parse(strings.NewReader(`
+[ sect ]
+x = "10"
+s = "hi there"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Field("x").Int64Val(store) != 10 {
+		t.Fatal("x")
+	}
+	if s.Field("s").StringVal(store) != "hi there" {
+		t.Fatal("s")
+	}
+
+	p.QuoteChar = '/'
+	store, err = p.Parse(strings.NewReader(`
+[ sect ]
+x = /10/
+s = "hi there"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Field("x").Int64Val(store) != 10 {
+		t.Fatal("x")
+	}
+	if s.Field("s").StringVal(store) != `"hi there"` {
+		t.Fatal("s")
+	}
+}
+
+// Non-standard defaults and parsers for pre-defined types
+
+func TestBuiltinDefaultAndParse(t *testing.T) {
+	sParse := func (s string) (any, bool) {
+		if s == "" {
+			return "empty", true
+		}
+		before, _, _ := strings.Cut(s, " ")
+		return before, true
+	}
+	p := NewParser()
+	s := p.AddSection("sect")
+	s.Add("x", TyInt64, int64(1), ParseInt64)
+	s.Add("s", TyString, "hi", ParseString)
+	s.Add("w", TyString, "", sParse)
+	s.Add("y", TyString, "", sParse)
+	store, err := p.Parse(strings.NewReader(`
+[ sect ]
+y=
+w= ho there 
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Field("x").Int64Val(store) != 1 {
+		t.Fatal("x")
+	}
+	if s.Field("s").StringVal(store) != "hi" {
+		t.Fatal("s")
+	}
+	if s.Field("y").StringVal(store) != "empty" {
+		t.Fatal("y")
+	}
+	if s.Field("w").StringVal(store) != "ho" {
+		t.Fatal("w")
 	}
 }
