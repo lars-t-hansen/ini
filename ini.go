@@ -58,15 +58,15 @@ const (
 
 // An error from the parser
 type ParseError struct {
-	Line int					// The line number in the input where the error was discovered
-	Section string				// The section name context, if not ""
-	Irritant string				// Informative text and context
+	Line     int    // The line number in the input where the error was discovered
+	Section  string // The section name context, if not ""
+	Irritant string // Informative text and context
 }
 
 func parseFail(line int, section string, format string, args ...any) *ParseError {
-	return &ParseError {
-		Line: line,
-		Section: section,
+	return &ParseError{
+		Line:     line,
+		Section:  section,
 		Irritant: fmt.Sprintf(format, args...),
 	}
 }
@@ -123,12 +123,13 @@ type Section struct {
 	fields map[string]*Field
 }
 
-// Add a new boolean field of the given name to the section.  Values can be true, false, or the
-// empty string (meaning true).
+// Add a new boolean field of the given name to the section.  Values can be
+// true, false, or the empty string (meaning true).  The default value is false.
 func (section *Section) AddBool(name string) *Field {
 	return section.Add(name, TyBool, false, ParseBool)
 }
 
+// Accepts any bool value.  "true" and the empty string are true values, "false" is the false value.
 func ParseBool(s string) (any, bool) {
 	switch s {
 	case "true", "":
@@ -140,20 +141,24 @@ func ParseBool(s string) (any, bool) {
 	}
 }
 
-// Add a new string field of the given name to the section.  Values can be any string.
+// Add a new string field of the given name to the section.  Values can be any string.  The default
+// value is the empty string.
 func (s *Section) AddString(name string) *Field {
 	return s.Add(name, TyString, "", ParseString)
 }
 
+// Accepts any string value.
 func ParseString(s string) (any, bool) {
 	return s, true
 }
 
 // Add a new int64 field of the given name to the section.  Values can be signed, decimal integers.
+// The default value is zero.
 func (section *Section) AddInt64(name string) *Field {
 	return section.Add(name, TyInt64, int64(0), ParseInt64)
 }
 
+// Accepts any int64 value.
 func ParseInt64(s string) (any, bool) {
 	v, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
@@ -163,11 +168,12 @@ func ParseInt64(s string) (any, bool) {
 }
 
 // Add a new uint64 field of the given name to the section.  Values can be unsigned, decimal
-// integers.
+// integers.  The default value is zero.
 func (section *Section) AddUint64(name string) *Field {
 	return section.Add(name, TyUint64, uint64(0), ParseUint64)
 }
 
+// Accepts any uint64 value.
 func ParseUint64(s string) (any, bool) {
 	v, err := strconv.ParseUint(s, 10, 64)
 	if err != nil {
@@ -177,11 +183,12 @@ func ParseUint64(s string) (any, bool) {
 }
 
 // Add a new float64 field of the given name to the section.  Values can be signed, decimal
-// floating-point numbers.
+// floating-point numbers.  The default value is zero.
 func (s *Section) AddFloat64(name string) *Field {
 	return s.Add(name, TyFloat64, 0.0, ParseFloat64)
 }
 
+// Accepts any float64 value.
 func ParseFloat64(s string) (any, bool) {
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
@@ -245,7 +252,7 @@ func (f *Field) Present(s *Store) bool {
 	return found
 }
 
-// Return the field's value in the input, or false.
+// Return the field's value in the input, or the default.
 func (f *Field) BoolVal(s *Store) bool {
 	if f.ty != TyBool {
 		panic("Bool accessor on non-bool field")
@@ -256,7 +263,7 @@ func (f *Field) BoolVal(s *Store) bool {
 	return f.defaultValue.(bool)
 }
 
-// Return the field's value in the input, or the empty string.
+// Return the field's value in the input, or the empty default.
 func (f *Field) StringVal(s *Store) string {
 	if f.ty != TyString {
 		panic("String accessor on non-string field")
@@ -267,7 +274,7 @@ func (f *Field) StringVal(s *Store) string {
 	return f.defaultValue.(string)
 }
 
-// Return the field's value in the input, or zero.
+// Return the field's value in the input, or the default.
 func (f *Field) Float64Val(s *Store) float64 {
 	if f.ty != TyFloat64 {
 		panic("Float64 accessor on non-float64 field")
@@ -278,7 +285,7 @@ func (f *Field) Float64Val(s *Store) float64 {
 	return f.defaultValue.(float64)
 }
 
-// Return the field's value in the input, or zero.
+// Return the field's value in the input, or the default.
 func (f *Field) Int64Val(s *Store) int64 {
 	if f.ty != TyInt64 {
 		panic("Int64 accessor on non-int64 field")
@@ -289,7 +296,7 @@ func (f *Field) Int64Val(s *Store) int64 {
 	return f.defaultValue.(int64)
 }
 
-// Return the field's value in the input, or zero.
+// Return the field's value in the input, or the default.
 func (f *Field) Uint64Val(s *Store) uint64 {
 	if f.ty != TyUint64 {
 		panic("Uint64 accessor on non-uint64 field")
@@ -404,7 +411,7 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 		return nil, parseFail(lineno, sect.name, "Invalid syntax")
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, parseFail(lineno, "", "I/O error: " + err.Error())
+		return nil, parseFail(lineno, "", "I/O error: "+err.Error())
 	}
 
 	return store, nil

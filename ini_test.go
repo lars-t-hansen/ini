@@ -1,3 +1,6 @@
+// TODO: user types in a better way (try string list)
+// TODO: error cases
+
 package ini
 
 import (
@@ -5,11 +8,6 @@ import (
 	"strings"
 	"testing"
 )
-
-// TODO: unusual defaults for standard types
-// TODO: user types in a better way (try string list)
-// TODO: default values for user types
-// TODO: error cases
 
 func TestGood(t *testing.T) {
 	p := NewParser()
@@ -228,7 +226,7 @@ s = "hi there"
 // Non-standard defaults and parsers for pre-defined types
 
 func TestBuiltinDefaultAndParse(t *testing.T) {
-	sParse := func (s string) (any, bool) {
+	sParse := func(s string) (any, bool) {
 		if s == "" {
 			return "empty", true
 		}
