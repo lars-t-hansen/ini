@@ -44,7 +44,7 @@ var (
 	valRe  = regexp.MustCompile(`^\s*([a-zA-Z0-9-_]+)\s*=(.*)$`)
 )
 
-// Type tags for fields.
+// A FieldTy describes the type of the field.
 type FieldTy int
 
 const (
@@ -56,7 +56,7 @@ const (
 	TyUser                       // The field is a user-defined type (for this and higher FieldTy values)
 )
 
-// An error from the parser
+// A ParseError describes an error encountered during parsing with its location and nature.
 type ParseError struct {
 	Line     int    // The line number in the input where the error was discovered
 	Section  string // The section name context, if not ""
@@ -78,13 +78,17 @@ func (pe *ParseError) Error() string {
 	return fmt.Sprintf("Line %d: %s", pe.Line, pe.Irritant)
 }
 
-// A Parser is a container for a set of sections.
+// A Parser holds the structure of the ini file and its parsing options, and performs parsing.
 type Parser struct {
-	// Lines whose first nonblank matches CommentChar are stripped.
+	// CommentChar is the character that starts line comments: lines whose first nonblank matches
+	// CommentChar are stripped from the input.
 	CommentChar rune
-	// Values whose first and last nonblank match QuoteChar are stripped of those chars (both must
-	// be present for stripping to happen).  Set to ' ' to disable quote stripping.
+
+	// QuoteChar is the character that is used for quoting values: values whose first and last
+	// nonblank match QuoteChar are stripped of those chars (both must be present for stripping to
+	// happen).  Set to ' ' to disable quote stripping.
 	QuoteChar rune
+
 	sections  map[string]*Section
 }
 
@@ -97,7 +101,9 @@ func NewParser() *Parser {
 	}
 }
 
-// Add a new section with the given name (which must not be present and must be syntactically valid).
+// AddSection adds a new ini section with the given name to the parser.  A section of that name must
+// not be present in the section already, and the name must be syntactically valid (see the package
+// documentation).
 func (parser *Parser) AddSection(name string) *Section {
 	if !nameRe.MatchString(name) {
 		panic("Invalid section name " + name)
@@ -111,7 +117,7 @@ func (parser *Parser) AddSection(name string) *Section {
 	return s
 }
 
-// Look up the section and return it if found, otherwise return nil.
+// Section looks up the section by name and returns it if found, otherwise return nil.
 func (parser *Parser) Section(name string) *Section {
 	return parser.sections[name]
 }
@@ -123,13 +129,15 @@ type Section struct {
 	fields map[string]*Field
 }
 
-// Add a new boolean field of the given name to the section.  Values can be
-// true, false, or the empty string (meaning true).  The default value is false.
+// AddBool adds a new boolean field of the given name to the section.  The name must not be present
+// in the section and must be syntactically valid (see package comments).  ParseBool describes the
+// accepted values.  The default value is false.
 func (section *Section) AddBool(name string) *Field {
 	return section.Add(name, TyBool, false, ParseBool)
 }
 
-// Accepts any bool value.  "true" and the empty string are true values, "false" is the false value.
+// ParseBool accepts any string representing a bool value, returning the value and a validity flag.
+// "true" and the empty string are true values, "false" is the false value.
 func ParseBool(s string) (any, bool) {
 	switch s {
 	case "true", "":
@@ -141,24 +149,27 @@ func ParseBool(s string) (any, bool) {
 	}
 }
 
-// Add a new string field of the given name to the section.  Values can be any string.  The default
-// value is the empty string.
+// AddString adds a new string field of the given name to the section.  The name must not be present
+// in the section and must be syntactically valid (see package comments).  ParseString describes the
+// accepted values.  The default value is the empty string.
 func (s *Section) AddString(name string) *Field {
 	return s.Add(name, TyString, "", ParseString)
 }
 
-// Accepts any string value.
+// ParseString accepts any string value, returning its input and true.
 func ParseString(s string) (any, bool) {
 	return s, true
 }
 
-// Add a new int64 field of the given name to the section.  Values can be signed, decimal integers.
-// The default value is zero.
+// AddInt64 adds a new int64 field of the given name to the section.  The name must not be present
+// in the section and must be syntactically valid (see package comments).  ParseInt64 describes the
+// accepted values.  The default value is zero.
 func (section *Section) AddInt64(name string) *Field {
 	return section.Add(name, TyInt64, int64(0), ParseInt64)
 }
 
-// Accepts any int64 value.
+// ParseInt64 accepts any string representing a signed, decimal integer in the range of int64,
+// returning the value and a validity flag.
 func ParseInt64(s string) (any, bool) {
 	v, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
@@ -167,13 +178,15 @@ func ParseInt64(s string) (any, bool) {
 	return v, true
 }
 
-// Add a new uint64 field of the given name to the section.  Values can be unsigned, decimal
-// integers.  The default value is zero.
+// AddUint64 adds a new uint64 field of the given name to the section.  The name must not be present
+// in the section and must be syntactically valid (see package comments).  ParseUint64 describes the
+// accepted values.  The default value is zero.
 func (section *Section) AddUint64(name string) *Field {
 	return section.Add(name, TyUint64, uint64(0), ParseUint64)
 }
 
-// Accepts any uint64 value.
+// ParseUint64 accepts any string representing an unsigned, decimal integer in the range of uint64,
+// returning the value and a validity flag.
 func ParseUint64(s string) (any, bool) {
 	v, err := strconv.ParseUint(s, 10, 64)
 	if err != nil {
@@ -182,13 +195,15 @@ func ParseUint64(s string) (any, bool) {
 	return v, true
 }
 
-// Add a new float64 field of the given name to the section.  Values can be signed, decimal
-// floating-point numbers.  The default value is zero.
+// AddFloat64 adds a new float64 field of the given name to the section.  The name must not be
+// present in the section and must be syntactically valid (see package comments).  ParseFloat64
+// describes the accepted values.  The default value is zero.
 func (s *Section) AddFloat64(name string) *Field {
 	return s.Add(name, TyFloat64, 0.0, ParseFloat64)
 }
 
-// Accepts any float64 value.
+// ParseFloat64 accepts any string representing a signed, decimal floating-point value in the range
+// of float64, returning the value and a validity flag.
 func ParseFloat64(s string) (any, bool) {
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
@@ -197,10 +212,16 @@ func ParseFloat64(s string) (any, bool) {
 	return v, true
 }
 
-// Add a field of the given name and default value to the section.  The `ty` can be a pre-defined
-// type tag if that is the representation of the value, or it must be >= TyUser to indicate
-// something non-standard.  The `valid` function will take a string and return a parsed value and
-// true if the value is good, otherwise an arbitrary value and false.
+// Add adds a field of the given name to the section.  The name must not be present in the section
+// and must be syntactically valid (see package comments).  The defaultValue will be used if the
+// field is not present in the input.  The ty can be a pre-defined type tag if that is the
+// representation of the value, or it must be >= TyUser to indicate something non-standard.  The
+// valid function will take a string and return a parsed value and true if the value is good,
+// otherwise an arbitrary value and false.
+//
+// The defaultValue and the value returned by valid must be of the same type, and if a pre-defined
+// type tag is used they must both be of the corresponding type.  (A common error is to pass eg 1
+// rather than uint64(1) as a defaultValue with TyUint64 for ty.)
 func (section *Section) Add(name string, ty FieldTy, defaultValue any, valid func(s string) (any, bool)) *Field {
 	if !nameRe.MatchString(name) {
 		panic("Invalid field name " + name)
@@ -216,17 +237,22 @@ func (section *Section) Add(name string, ty FieldTy, defaultValue any, valid fun
 	return f
 }
 
-// Return the field from the section, or nil if there is no such field.
+// Name returns the name of the section.
+func (section *Section) Name() string {
+	return section.name
+}
+
+// Field returns the field of the given name from the section, or nil if there is no such field.
 func (s *Section) Field(name string) *Field {
 	return s.fields[name]
 }
 
-// Return true if the section was present in the input (even if it contained no settings).
+// Present returns true if the section was present in the input (even if it contained no settings).
 func (section *Section) Present(store *Store) bool {
 	return store.lookupSect(section)
 }
 
-// A field represent both a field within a Section and is an accessor for the parsed value of that
+// A field represents a field within a Section and is also an accessor for the parsed value of that
 // field within a Store.
 type Field struct {
 	section      *Section
@@ -236,23 +262,23 @@ type Field struct {
 	valid        func(s string) (any, bool)
 }
 
-// The field's name.
+// Name returns the field's name.
 func (field *Field) Name() string {
 	return field.name
 }
 
-// The field's type tag.
+// Type returns the field's type tag.
 func (field *Field) Type() FieldTy {
 	return field.ty
 }
 
-// Return true if the field was present in the input.
+// Present returns true if the field was present in the input.
 func (f *Field) Present(s *Store) bool {
 	_, found := s.lookupVal(f.section, f)
 	return found
 }
 
-// Return the field's value in the input, or the default.
+// BoolVal returns a boolean field's value in the input, or the default if the field was not present.
 func (f *Field) BoolVal(s *Store) bool {
 	if f.ty != TyBool {
 		panic("Bool accessor on non-bool field")
@@ -263,7 +289,7 @@ func (f *Field) BoolVal(s *Store) bool {
 	return f.defaultValue.(bool)
 }
 
-// Return the field's value in the input, or the empty default.
+// StringVal returns a string field's value in the input, or the default if the field was not present.
 func (f *Field) StringVal(s *Store) string {
 	if f.ty != TyString {
 		panic("String accessor on non-string field")
@@ -274,7 +300,7 @@ func (f *Field) StringVal(s *Store) string {
 	return f.defaultValue.(string)
 }
 
-// Return the field's value in the input, or the default.
+// Float64Val returns a float64 field's value in the input, or the default if the field was not present.
 func (f *Field) Float64Val(s *Store) float64 {
 	if f.ty != TyFloat64 {
 		panic("Float64 accessor on non-float64 field")
@@ -285,7 +311,7 @@ func (f *Field) Float64Val(s *Store) float64 {
 	return f.defaultValue.(float64)
 }
 
-// Return the field's value in the input, or the default.
+// Int64Val returns an int64 field's value in the input, or the default if the field was not present.
 func (f *Field) Int64Val(s *Store) int64 {
 	if f.ty != TyInt64 {
 		panic("Int64 accessor on non-int64 field")
@@ -296,7 +322,7 @@ func (f *Field) Int64Val(s *Store) int64 {
 	return f.defaultValue.(int64)
 }
 
-// Return the field's value in the input, or the default.
+// Uint64Val returns an uint64 field's value in the input, or the default if the field was not present.
 func (f *Field) Uint64Val(s *Store) uint64 {
 	if f.ty != TyUint64 {
 		panic("Uint64 accessor on non-uint64 field")
@@ -307,7 +333,7 @@ func (f *Field) Uint64Val(s *Store) uint64 {
 	return f.defaultValue.(uint64)
 }
 
-// Return the field's value in the input as an any, or the default value if the field was not
+// Value returns field's value in the input as an any, or the default value if the field was not
 // present.
 func (f *Field) Value(s *Store) any {
 	v, found := s.lookupVal(f.section, f)
@@ -317,7 +343,7 @@ func (f *Field) Value(s *Store) any {
 	return f.defaultValue
 }
 
-// The Store holds the result of a successful parse.  It is passed as an argument to methods on
+// A Store holds the result of a successful parse.  It is passed as an argument to methods on
 // individual Fields to retrieve those fields' values.
 type Store struct {
 	sections map[string]*sectStore
@@ -355,8 +381,10 @@ func (store *Store) set(section *Section, field *Field, val any) {
 	store.ensure(section).values[field.name] = val
 }
 
-// Parse the input from the reader.  Concurrent parsing is safe, but no sections or fields may be
-// added while parsing is happening in any goroutine.
+// Parse parses the input from the reader, returning a store with information about field presence
+// and values.  Errors in field parsing result in an error being returned with no store.  Concurrent
+// parsing is safe, but no sections or fields may be added while parsing is happening in any
+// goroutine.
 func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 	names := slices.Collect(maps.Keys(parser.sections))
 	sectionRe := regexp.MustCompile(`^\s*\[\s*(` + strings.Join(names, "|") + `)\s*\]\s*$`)
