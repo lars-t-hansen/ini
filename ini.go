@@ -9,7 +9,7 @@
 // header.  Within each section is a sequence of field settings, each on the form name=value.
 // Blank lines are ignored.  Lines whose first nonblank is CommentChar (default '#') are ignored.
 // There can be blanks at the beginning and end of all lines and on either side of the '=', and
-// inside the brackets of the header. Section and field names must conform to [a-zA-Z0-9-_]+, and
+// inside the brackets of the header. Section and field names must conform to [-a-zA-Z0-9_]+, and
 // are case-sensitive.
 //
 // The fields are typed, the value must conform to the type, though blank values are accepted for
@@ -46,7 +46,7 @@ import (
 )
 
 var (
-	nameRe = regexp.MustCompile(`^[a-zA-Z0-9-_]+$`)
+	nameRe = regexp.MustCompile(`^[-a-zA-Z0-9_]+$`)
 	valRe  = regexp.MustCompile(`^\s*([a-zA-Z0-9-_]+)\s*=(.*)$`)
 )
 
