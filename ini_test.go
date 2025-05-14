@@ -1,5 +1,7 @@
 // TODO: user types in a better way (try string list)
 // TODO: error cases
+// TODO: more identifier chars
+// TODO: case sensitivity
 
 package ini
 
