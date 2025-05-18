@@ -98,13 +98,40 @@ type Parser struct {
 	sections map[string]*Section
 }
 
-// Make a new, empty parser with default settings.
-func NewParser() *Parser {
-	return &Parser{
+// Make a new, empty parser with default settings.  If options are present they are used to alter
+// the settings.  Each option is a pair: a string keyword and a value of the appropriate type.  The
+// keywords are the exact option member names, eg, "CommentChar".
+func NewParser(options ...any) *Parser {
+	p := &Parser{
 		CommentChar: '#',
 		QuoteChar:   '"',
 		sections:    make(map[string]*Section),
 	}
+	if len(options) % 2 != 0 {
+		panic("Bad options: must be keyword / value pairs")
+	}
+	i := 0
+	for i < len(options) {
+		k := options[i]
+		v := options[i+1]
+		i += 2
+		if kwd, ok := k.(string); ok {
+			switch kwd {
+			case "CommentChar":
+				if val, ok := v.(rune); ok {
+					p.CommentChar = val
+					continue
+				}
+			case "QuoteChar":
+				if val, ok := v.(rune); ok {
+					p.QuoteChar = val
+					continue
+				}
+			}
+		}
+		panic(fmt.Sprintf("Bad keyword / value combination %T %v / %T %v", k, k, v, v))
+	}
+	return p
 }
 
 // AddSection adds a new ini section with the given name to the parser.  A section of that name must

@@ -262,3 +262,13 @@ w= ho there
 		t.Fatal("w")
 	}
 }
+
+func TestOptions(t *testing.T) {
+	p := NewParser("CommentChar", ';', "QuoteChar", '/')
+	if p.CommentChar != ';' {
+		t.Fatal("CommentChar")
+	}
+	if p.QuoteChar != '/' {
+		t.Fatal("QuoteChar")
+	}
+}
