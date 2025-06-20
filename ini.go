@@ -14,7 +14,7 @@
 //
 // The fields are typed, the value must conform to the type, though blank values are accepted for
 // strings (empty string) and booleans (true).  All values can be quoted with matching quotes according
-// to QuoteChar (default '"'), the quotes are stripped.  Set QuoteChar to ' ' to disable all quote
+// to QuoteChar (default '"'), the quotes are stripped.  Set QuoteChar to 0 to disable all quote
 // stripping.  Leading and trailing blanks of the value (outside any quotes) are always stripped.
 //
 // # Usage
@@ -24,8 +24,8 @@
 // pre-defined types, eg [Section.AddString], or the general [Section.Add] for user-defined types or
 // non-standard default values or parsing.
 //
-// Parse an input stream with [Parser.Parse].  This will return a [Store] (or an
-// error).  Access field values via the Field objects on the Store, or directly on the Store itself.
+// Parse an input stream with [Parser.Parse].  This will return a [Store] (or an error).  Access
+// field values via the Field objects on the Store, or directly on the Store itself.
 //
 // # Errors
 //
@@ -92,7 +92,7 @@ type Parser struct {
 
 	// QuoteChar is the character that is used for quoting values: values whose first and last
 	// nonblank match QuoteChar are stripped of those chars (both must be present for stripping to
-	// happen).  Set to ' ' to disable quote stripping.
+	// happen).  Set to 0 to disable quote stripping.
 	QuoteChar rune
 
 	sections map[string]*Section
@@ -453,7 +453,7 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 				return nil, parseFail(lineno, sect.name, "No field %s", m[1])
 			}
 			s := strings.TrimSpace(m[2])
-			if parser.QuoteChar != ' ' {
+			if parser.QuoteChar != 0 {
 				c := string(parser.QuoteChar)
 				if strings.HasPrefix(s, c) && strings.HasSuffix(s, c) {
 					s = strings.TrimSuffix(strings.TrimPrefix(s, c), c)

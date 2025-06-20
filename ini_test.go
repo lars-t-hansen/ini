@@ -2,6 +2,7 @@
 // TODO: error cases
 // TODO: more identifier chars
 // TODO: case sensitivity
+// TODO: QuoteChar == 0
 
 package ini
 
