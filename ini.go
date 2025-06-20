@@ -1,6 +1,3 @@
-// TODO doc:
-// - examples
-
 // Package ini implements a generic, simple ini file parser.
 //
 // # Syntax
@@ -13,9 +10,10 @@
 // are case-sensitive.
 //
 // The fields are typed, the value must conform to the type, though blank values are accepted for
-// strings (empty string) and booleans (true).  All values can be quoted with matching quotes according
-// to QuoteChar (default '"'), the quotes are stripped.  Set QuoteChar to 0 to disable all quote
-// stripping.  Leading and trailing blanks of the value (outside any quotes) are always stripped.
+// strings (empty string) and booleans (true).  All values can be quoted with matching quotes
+// according to QuoteChar (default '"'), the quotes are stripped.  Set QuoteChar to 0 to disable all
+// quote stripping.  Leading and trailing blanks of the value (outside any quotes) are always
+// stripped.
 //
 // # Usage
 //
@@ -59,7 +57,7 @@ const (
 	TyInt64                      // The field is an int64
 	TyUint64                     // The field is an uint64
 	TyFloat64                    // The field is a float64
-	TyUser                       // The field is a user-defined type (for this and higher FieldTy values)
+	TyUser                       // The field is a user-defined type (for this and higher values)
 )
 
 // A ParseError describes an error encountered during parsing with its location and nature.
@@ -86,13 +84,13 @@ func (pe *ParseError) Error() string {
 
 // A Parser holds the structure of the ini file and its parsing options, and performs parsing.
 type Parser struct {
-	// CommentChar is the character that starts line comments: lines whose first nonblank matches
-	// CommentChar are stripped from the input.
+	// CommentChar is the character that starts line comments (default '#'): lines whose first
+	// nonblank matches CommentChar are stripped from the input.
 	CommentChar rune
 
-	// QuoteChar is the character that is used for quoting values: values whose first and last
-	// nonblank match QuoteChar are stripped of those chars (both must be present for stripping to
-	// happen).  Set to 0 to disable quote stripping.
+	// QuoteChar is the character that is used for quoting values (default '"'): values whose first
+	// and last nonblank match QuoteChar are stripped of those chars (both must be present for
+	// stripping to happen).  Set to 0 to disable quote stripping.
 	QuoteChar rune
 
 	sections map[string]*Section
@@ -107,7 +105,7 @@ func NewParser(options ...any) *Parser {
 		QuoteChar:   '"',
 		sections:    make(map[string]*Section),
 	}
-	if len(options) % 2 != 0 {
+	if len(options)%2 != 0 {
 		panic("Bad options: must be keyword / value pairs")
 	}
 	i := 0
@@ -255,7 +253,12 @@ func ParseFloat64(s string) (any, bool) {
 // The defaultValue and the value returned by valid must be of the same type, and if a pre-defined
 // type tag is used they must both be of the corresponding type.  (A common error is to pass eg 1
 // rather than uint64(1) as a defaultValue with TyUint64 for ty.)
-func (section *Section) Add(name string, ty FieldTy, defaultValue any, valid func(s string) (any, bool)) *Field {
+func (section *Section) Add(
+	name string,
+	ty FieldTy,
+	defaultValue any,
+	valid func(s string) (any, bool),
+) *Field {
 	if !nameRe.MatchString(name) {
 		panic("Invalid field name " + name)
 	}
@@ -311,7 +314,8 @@ func (field *Field) Present(store *Store) bool {
 	return found
 }
 
-// BoolVal returns a boolean field's value in the input, or the default if the field was not present.
+// BoolVal returns a boolean field's value in the input, or the default if the field was not
+// present.
 func (field *Field) BoolVal(store *Store) bool {
 	if field.ty != TyBool {
 		panic("Bool accessor on non-bool field")
@@ -322,7 +326,8 @@ func (field *Field) BoolVal(store *Store) bool {
 	return field.defaultValue.(bool)
 }
 
-// StringVal returns a string field's value in the input, or the default if the field was not present.
+// StringVal returns a string field's value in the input, or the default if the field was not
+// present.
 func (field *Field) StringVal(store *Store) string {
 	if field.ty != TyString {
 		panic("String accessor on non-string field")
@@ -333,7 +338,8 @@ func (field *Field) StringVal(store *Store) string {
 	return field.defaultValue.(string)
 }
 
-// Float64Val returns a float64 field's value in the input, or the default if the field was not present.
+// Float64Val returns a float64 field's value in the input, or the default if the field was not
+// present.
 func (field *Field) Float64Val(store *Store) float64 {
 	if field.ty != TyFloat64 {
 		panic("Float64 accessor on non-float64 field")
@@ -344,7 +350,8 @@ func (field *Field) Float64Val(store *Store) float64 {
 	return field.defaultValue.(float64)
 }
 
-// Int64Val returns an int64 field's value in the input, or the default if the field was not present.
+// Int64Val returns an int64 field's value in the input, or the default if the field was not
+// present.
 func (field *Field) Int64Val(store *Store) int64 {
 	if field.ty != TyInt64 {
 		panic("Int64 accessor on non-int64 field")
@@ -355,7 +362,8 @@ func (field *Field) Int64Val(store *Store) int64 {
 	return field.defaultValue.(int64)
 }
 
-// Uint64Val returns an uint64 field's value in the input, or the default if the field was not present.
+// Uint64Val returns an uint64 field's value in the input, or the default if the field was not
+// present.
 func (field *Field) Uint64Val(store *Store) uint64 {
 	if field.ty != TyUint64 {
 		panic("Uint64 accessor on non-uint64 field")
@@ -415,9 +423,9 @@ func (store *Store) set(section *Section, field *Field, val any) {
 }
 
 // Parse parses the input from the reader, returning a [Store] with information about field presence
-// and values.  Errors in field parsing result in a [*ParseError] being returned with no store.  Concurrent
-// parsing is safe, but no sections or fields may be added while parsing is happening in any
-// goroutine.
+// and values.  Errors in field parsing result in a [*ParseError] being returned with no store.
+// Concurrent parsing is safe, but no sections or fields may be added while the parser is in use for
+// parsing in any goroutine.
 func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 	names := slices.Collect(maps.Keys(parser.sections))
 	sectionRe := regexp.MustCompile(`^\s*\[\s*(` + strings.Join(names, "|") + `)\s*\]\s*$`)
@@ -461,7 +469,8 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 			}
 			val, valid := field.valid(s)
 			if !valid {
-				return nil, parseFail(lineno, sect.name, "Value '%s' is not valid for field %s", s, m[1])
+				return nil, parseFail(
+					lineno, sect.name, "Value '%s' is not valid for field %s", s, m[1])
 			}
 			store.set(sect, field, val)
 			continue
