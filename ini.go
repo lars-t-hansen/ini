@@ -37,6 +37,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"os"
 	"regexp"
 	"slices"
 	"strconv"
@@ -46,6 +47,7 @@ import (
 var (
 	nameRe = regexp.MustCompile(`^[-a-zA-Z0-9_$]+$`)
 	valRe  = regexp.MustCompile(`^\s*([-a-zA-Z0-9_$]+)\s*=(.*)$`)
+	varRe  = regexp.MustCompile(`\$\$|\$[-a-zA-Z0-9_]+|\$\{[^}]*\}`)
 )
 
 // A FieldTy describes the type of the field.
@@ -93,6 +95,13 @@ type Parser struct {
 	// stripping to happen).  Set to 0 to disable quote stripping.
 	QuoteChar rune
 
+	// ExpandVars controls the expansion of environment variables in values (default false): if
+	// true, environment variable references such as $HOME and ${HOME} are replaced by their values
+	// (which are not further expanded).  Variables that are not bound in the environment are
+	// replaced by the empty string.  A $ can be doubled to remove its metacharacter meaning: $$HOME
+	// expands to $HOME.
+	ExpandVars bool
+
 	sections map[string]*Section
 }
 
@@ -103,6 +112,7 @@ func NewParser(options ...any) *Parser {
 	p := &Parser{
 		CommentChar: '#',
 		QuoteChar:   '"',
+		ExpandVars:  false,
 		sections:    make(map[string]*Section),
 	}
 	if len(options)%2 != 0 {
@@ -123,6 +133,11 @@ func NewParser(options ...any) *Parser {
 			case "QuoteChar":
 				if val, ok := v.(rune); ok {
 					p.QuoteChar = val
+					continue
+				}
+			case "ExpandVars":
+				if val, ok := v.(bool); ok {
+					p.ExpandVars = val
 					continue
 				}
 			}
@@ -466,6 +481,20 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 				if strings.HasPrefix(s, c) && strings.HasSuffix(s, c) {
 					s = strings.TrimSuffix(strings.TrimPrefix(s, c), c)
 				}
+			}
+			if parser.ExpandVars {
+				s = varRe.ReplaceAllStringFunc(s, func(m string) string {
+					if m == "$$" {
+						return "$"
+					}
+					var name string
+					if m[1] == '{' {
+						name = m[2 : len(m)-1]
+					} else {
+						name = m[1:]
+					}
+					return os.Getenv(name)
+				})
 			}
 			val, valid := field.valid(s)
 			if !valid {

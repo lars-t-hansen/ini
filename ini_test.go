@@ -273,3 +273,21 @@ func TestOptions(t *testing.T) {
 		t.Fatal("QuoteChar")
 	}
 }
+
+func TestVar(t *testing.T) {
+	p := NewParser("ExpandVars", true)
+	s := p.AddSection("sect")
+	s.AddString("s")
+	store, err := p.Parse(strings.NewReader(`
+[ sect ]
+s = "hi there $SHELL$SHUL$$${USER}"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	shell := os.Getenv("SHELL")
+	user := os.Getenv("USER")
+	if s.Field("s").StringVal(store) != "hi there "+shell+"$"+user {
+		t.Fatal(s.Field("s").StringVal(store))
+	}
+}
