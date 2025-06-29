@@ -8,6 +8,7 @@ package ini
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -301,5 +302,31 @@ n = ${S}37$S
 	}
 	if s.Field("n").Int64Val(store) != 37 {
 		t.Fatal(s.Field("n").Int64Val(store))
+	}
+}
+
+func TestList(t *testing.T) {
+	p := NewParser()
+	s := p.AddSection("sect")
+	s.AddStringList("names")
+	s.AddFloat64List("factors")
+	store, err := p.Parse(strings.NewReader(`
+[sect]
+names=[
+  john, luke ,
+  # on probation only
+  mark,
+  'matthew aka matteus' ,
+]
+factors=[10,20, 15.5 ,'12.75']
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(s.Field("names").StringListVal(store), []string{"john","luke","mark","matthew aka matteus"}) {
+		t.Fatal(s.Field("names").StringListVal(store))
+	}
+	if !slices.Equal(s.Field("factors").Float64ListVal(store), []float64{10, 20, 15.5, 12.75}) {
+		t.Fatal(s.Field("factors").Float64ListVal(store))
 	}
 }

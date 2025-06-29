@@ -22,6 +22,12 @@
 // subject to further expansion.  Expansion takes place before blank and quote stripping and value
 // interpretation, and is not affected by quoting.
 //
+// List values start with '[' and end with ']', and list elements are comma-separated.  A comma is
+// allowed after the last element (thus empty values in the last position must always be quoted).
+// Quotes and spaces around elements are processed as described above.  List values can span
+// multiple lines: while the last nonblank of the value is '[' or comma, the next line is consumed
+// and appended to the value.  Comment and blank lines are skipped also in this case.
+//
 // # Usage
 //
 // Create an ini parser with [NewParser] and customize any variables.  Then add a new [Section] to
@@ -199,6 +205,13 @@ func ParseBool(s string) (any, bool) {
 	}
 }
 
+// AddBoolList adds a new list-of-boolean field of the given name to the section.  The field name
+// must not be present in the section and must be syntactically valid (see package comments).
+// ParseBool describes the accepted values.
+func (section *Section) AddBoolList(name string) *Field {
+	return section.AddList(name, TyBool, make([]bool, 0), ParseBool)
+}
+
 // AddString adds a new string field of the given name to the section.  The name must not be present
 // in the section and must be syntactically valid (see package comments).  ParseString describes the
 // accepted values.  The default value is the empty string.
@@ -209,6 +222,13 @@ func (section *Section) AddString(name string) *Field {
 // ParseString accepts any string value, returning its input and true.
 func ParseString(s string) (any, bool) {
 	return s, true
+}
+
+// AddStringList adds a new list-of-string field of the given name to the section.  The field name
+// must not be present in the section and must be syntactically valid (see package comments).
+// ParseString describes the accepted values.
+func (section *Section) AddStringList(name string) *Field {
+	return section.AddList(name, TyString, make([]string, 0),ParseString)
 }
 
 // AddInt64 adds a new int64 field of the given name to the section.  The name must not be present
@@ -228,6 +248,13 @@ func ParseInt64(s string) (any, bool) {
 	return v, true
 }
 
+// AddInt64List adds a new list-of-int64 field of the given name to the section.  The field name
+// must not be present in the section and must be syntactically valid (see package comments).
+// ParseInt64 describes the accepted values.
+func (section *Section) AddInt64List(name string) *Field {
+	return section.AddList(name, TyInt64, make([]int64, 0), ParseInt64)
+}
+
 // AddUint64 adds a new uint64 field of the given name to the section.  The name must not be present
 // in the section and must be syntactically valid (see package comments).  ParseUint64 describes the
 // accepted values.  The default value is zero.
@@ -243,6 +270,13 @@ func ParseUint64(s string) (any, bool) {
 		return 0, false
 	}
 	return v, true
+}
+
+// AddUint64List adds a new list-of-int64 field of the given name to the section.  The field name
+// must not be present in the section and must be syntactically valid (see package comments).
+// ParseUint64 describes the accepted values.
+func (section *Section) AddUint64List(name string) *Field {
+	return section.AddList(name, TyUint64, make([]uint64, 0), ParseUint64)
 }
 
 // AddFloat64 adds a new float64 field of the given name to the section.  The name must not be
@@ -262,6 +296,13 @@ func ParseFloat64(s string) (any, bool) {
 	return v, true
 }
 
+// AddFloat64List adds a new list-of-float64 field of the given name to the section.  The field name
+// must not be present in the section and must be syntactically valid (see package comments).
+// ParseFloat64 describes the accepted values.
+func (section *Section) AddFloat64List(name string) *Field {
+	return section.AddList(name, TyFloat64, make([]float64, 0), ParseFloat64)
+}
+
 // Add adds a field of the given name to the section.  The name must not be present in the section
 // and must be syntactically valid (see package comments).  The defaultValue will be used if the
 // field is not present in the input.  The ty can be a pre-defined type tag if that is the
@@ -278,6 +319,33 @@ func (section *Section) Add(
 	defaultValue any,
 	valid func(s string) (any, bool),
 ) *Field {
+	return section.add(name, ty, false, defaultValue, valid)
+}
+
+// Add adds a list field of the given name with the given element type to the section.  The name
+// must not be present in the section and must be syntactically valid (see package comments).  The
+// ty can be a pre-defined type tag if that is the representation of the value, or it must be >=
+// TyUser to indicate something non-standard.  The valid function will take a string and return a
+// parsed value and true if the value is good, otherwise an arbitrary value and false.
+//
+// The defaultValue and the value returned by valid must be of the same type, and if a pre-defined
+// type tag is used they must both be slices of the corresponding type.
+func (section *Section) AddList(
+	name string,
+	ty FieldTy,
+	defaultValue any,
+	valid func(s string) (any, bool),
+) *Field {
+	return section.add(name, ty, true, defaultValue, valid)
+}
+
+func (section *Section) add(
+	name string,
+	ty FieldTy,
+	isList bool,
+	defaultValue any,
+	valid func(s string) (any, bool),
+) *Field {
 	if !nameRe.MatchString(name) {
 		panic("Invalid field name " + name)
 	}
@@ -287,7 +355,7 @@ func (section *Section) Add(
 	if section.fields[name] != nil {
 		panic("Duplicated field name " + name + " in section " + section.name)
 	}
-	f := &Field{section, name, ty, defaultValue, valid}
+	f := &Field{section, name, ty, isList, defaultValue, valid}
 	section.fields[name] = f
 	return f
 }
@@ -313,6 +381,7 @@ type Field struct {
 	section      *Section
 	name         string
 	ty           FieldTy
+	isList       bool
 	defaultValue any
 	valid        func(s string) (any, bool)
 }
@@ -381,6 +450,33 @@ func (field *Field) Value(store *Store) any {
 		return v
 	}
 	return field.defaultValue
+}
+
+func (field *Field) BoolListVal(store *Store) []bool {
+	return getListValue[[]bool]("Bool", TyBool, field, store)
+}
+
+func (field *Field) StringListVal(store *Store) []string {
+	return getListValue[[]string]("String", TyString, field, store)
+}
+
+func (field *Field) Float64ListVal(store *Store) []float64 {
+	return getListValue[[]float64]("Float64", TyString, field, store)
+}
+
+func (field *Field) Int64ListVal(store *Store) []int64 {
+	return getListValue[[]int64]("Int64", TyString, field, store)
+}
+
+func (field *Field) Uint64ListVal(store *Store) []uint64 {
+	return getListValue[[]uint64]("Uint64", TyString, field, store)
+}
+
+func getListValue[T any](name string, ty FieldTy, field *Field, store *Store) T {
+	if !field.isList {
+		panic(name + " list accessor on non-list field")
+	}
+	return getValue[T](name + " list", ty, field, store)
 }
 
 // A Store holds the result of a successful parse.  It is passed as an argument to methods on
@@ -458,6 +554,9 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 			field := sect.fields[m[1]]
 			if field == nil {
 				return nil, parseFail(lineno, sect.name, "No field %s", m[1])
+			}
+			if field.isList {
+				return nil, parseFail(lineno, sect.name, "List fields not supported yet")
 			}
 			s := m[2]
 			if parser.ExpandVars {
