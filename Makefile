@@ -1,7 +1,10 @@
-.PHONY: default
+.PHONY: default test
 
 default:
 	@echo "Pick an explicit target"
+
+test:
+	go test
 
 README.md: ini.go
 	echo "# ini" > README.md
