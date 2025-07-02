@@ -15,6 +15,13 @@
 // quote stripping.  Leading and trailing blanks of the value (outside any quotes) are always
 // stripped.
 //
+// Environment variable references in the values will be expanded if ExpandVars is true (default
+// false).  Variables match the syntax $[a-zA-Z0-9_]+ or ${[^}]+}, e.g. $HOME or ${HOME AGAIN?}.
+// Variables that are not bound in the environment are replaced by the empty string.  A $ can be
+// doubled to remove its metacharacter meaning: $$HOME expands to $HOME.  Replacement text is not
+// subject to further expansion.  Expansion takes place before blank and quote stripping and value
+// interpretation, and is not affected by quoting.
+//
 // # Usage
 //
 // Create an ini parser with [NewParser] and customize any variables.  Then add a new [Section] to
@@ -47,7 +54,7 @@ import (
 var (
 	nameRe = regexp.MustCompile(`^[-a-zA-Z0-9_$]+$`)
 	valRe  = regexp.MustCompile(`^\s*([-a-zA-Z0-9_$]+)\s*=(.*)$`)
-	varRe  = regexp.MustCompile(`\$\$|\$[-a-zA-Z0-9_]+|\$\{[^}]*\}`)
+	varRe  = regexp.MustCompile(`\$\$|\$[a-zA-Z0-9_]+|\$\{[^}]*\}`)
 )
 
 // A FieldTy describes the type of the field.
@@ -96,10 +103,7 @@ type Parser struct {
 	QuoteChar rune
 
 	// ExpandVars controls the expansion of environment variables in values (default false): if
-	// true, environment variable references such as $HOME and ${HOME} are replaced by their values
-	// (which are not further expanded).  Variables that are not bound in the environment are
-	// replaced by the empty string.  A $ can be doubled to remove its metacharacter meaning: $$HOME
-	// expands to $HOME.
+	// true, environment variable references are replaced by their values.
 	ExpandVars bool
 
 	sections map[string]*Section
@@ -475,13 +479,7 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 			if field == nil {
 				return nil, parseFail(lineno, sect.name, "No field %s", m[1])
 			}
-			s := strings.TrimSpace(m[2])
-			if parser.QuoteChar != 0 {
-				c := string(parser.QuoteChar)
-				if strings.HasPrefix(s, c) && strings.HasSuffix(s, c) {
-					s = strings.TrimSuffix(strings.TrimPrefix(s, c), c)
-				}
-			}
+			s := m[2]
 			if parser.ExpandVars {
 				s = varRe.ReplaceAllStringFunc(s, func(m string) string {
 					if m == "$$" {
@@ -495,6 +493,13 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 					}
 					return os.Getenv(name)
 				})
+			}
+			s = strings.TrimSpace(s)
+			if parser.QuoteChar != 0 {
+				c := string(parser.QuoteChar)
+				if strings.HasPrefix(s, c) && strings.HasSuffix(s, c) {
+					s = strings.TrimSuffix(strings.TrimPrefix(s, c), c)
+				}
 			}
 			val, valid := field.valid(s)
 			if !valid {

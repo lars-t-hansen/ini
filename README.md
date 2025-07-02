@@ -18,6 +18,14 @@ quoted with matching quotes according to QuoteChar (default '"'), the quotes
 are stripped. Set QuoteChar to 0 to disable all quote stripping. Leading and
 trailing blanks of the value (outside any quotes) are always stripped.
 
+Environment variable references in the values will be expanded if ExpandVars
+is true (default false). Variables match the syntax $[a-zA-Z0-9_]+ or ${[^}]+},
+e.g. $HOME or ${HOME AGAIN?}. Variables that are not bound in the environment
+are replaced by the empty string. A $ can be doubled to remove its metacharacter
+meaning: $$HOME expands to $HOME. Replacement text is not subject to further
+expansion. Expansion takes place before blank and quote stripping and value
+interpretation, and is not affected by quoting.
+
 # Usage
 
 Create an ini parser with NewParser and customize any variables. Then add a

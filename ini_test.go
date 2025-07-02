@@ -278,9 +278,15 @@ func TestVar(t *testing.T) {
 	p := NewParser("ExpandVars", true)
 	s := p.AddSection("sect")
 	s.AddString("s")
+	s.AddString("m")
+	s.AddInt64("n")
+	os.Setenv("Q", "\"")
+	os.Setenv("S", " ")
 	store, err := p.Parse(strings.NewReader(`
 [ sect ]
 s = "hi there $SHELL$SHUL$$${USER}"
+m = $Q${S}hello hello $Q
+n = ${S}37$S
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -289,5 +295,11 @@ s = "hi there $SHELL$SHUL$$${USER}"
 	user := os.Getenv("USER")
 	if s.Field("s").StringVal(store) != "hi there "+shell+"$"+user {
 		t.Fatal(s.Field("s").StringVal(store))
+	}
+	if s.Field("m").StringVal(store) != " hello hello " {
+		t.Fatal(s.Field("m").StringVal(store))
+	}
+	if s.Field("n").Int64Val(store) != 37 {
+		t.Fatal(s.Field("n").Int64Val(store))
 	}
 }
