@@ -206,7 +206,11 @@ func ParseBool(s string) (any, bool) {
 // must not be present in the section and must be syntactically valid (see package comments).
 // ParseBool describes the accepted values.
 func (section *Section) AddBoolList(name string) *Field {
-	return section.AddList(name, TyBool, make([]bool, 0), ParseBool)
+	return section.AddList(name, TyBool, make([]bool, 0), ParseBool, AppendBool)
+}
+
+func AppendBool(l, v any) any {
+	return append(l.([]bool), v.(bool))
 }
 
 // AddString adds a new string field of the given name to the section.  The name must not be present
@@ -225,7 +229,11 @@ func ParseString(s string) (any, bool) {
 // must not be present in the section and must be syntactically valid (see package comments).
 // ParseString describes the accepted values.
 func (section *Section) AddStringList(name string) *Field {
-	return section.AddList(name, TyString, make([]string, 0),ParseString)
+	return section.AddList(name, TyString, make([]string, 0),ParseString, AppendString)
+}
+
+func AppendString(l, v any) any {
+	return append(l.([]string), v.(string))
 }
 
 // AddInt64 adds a new int64 field of the given name to the section.  The name must not be present
@@ -249,7 +257,11 @@ func ParseInt64(s string) (any, bool) {
 // must not be present in the section and must be syntactically valid (see package comments).
 // ParseInt64 describes the accepted values.
 func (section *Section) AddInt64List(name string) *Field {
-	return section.AddList(name, TyInt64, make([]int64, 0), ParseInt64)
+	return section.AddList(name, TyInt64, make([]int64, 0), ParseInt64, AppendInt64)
+}
+
+func AppendInt64(l, v any) any {
+	return append(l.([]int64), v.(int64))
 }
 
 // AddUint64 adds a new uint64 field of the given name to the section.  The name must not be present
@@ -273,7 +285,11 @@ func ParseUint64(s string) (any, bool) {
 // must not be present in the section and must be syntactically valid (see package comments).
 // ParseUint64 describes the accepted values.
 func (section *Section) AddUint64List(name string) *Field {
-	return section.AddList(name, TyUint64, make([]uint64, 0), ParseUint64)
+	return section.AddList(name, TyUint64, make([]uint64, 0), ParseUint64, AppendUint64)
+}
+
+func AppendUint64(l, v any) any {
+	return append(l.([]uint64), v.(uint64))
 }
 
 // AddFloat64 adds a new float64 field of the given name to the section.  The name must not be
@@ -297,7 +313,11 @@ func ParseFloat64(s string) (any, bool) {
 // must not be present in the section and must be syntactically valid (see package comments).
 // ParseFloat64 describes the accepted values.
 func (section *Section) AddFloat64List(name string) *Field {
-	return section.AddList(name, TyFloat64, make([]float64, 0), ParseFloat64)
+	return section.AddList(name, TyFloat64, make([]float64, 0), ParseFloat64, AppendFloat64)
+}
+
+func AppendFloat64(l, v any) any {
+	return append(l.([]float64), v.(float64))
 }
 
 // Add adds a field of the given name to the section.  The name must not be present in the section
@@ -316,7 +336,7 @@ func (section *Section) Add(
 	defaultValue any,
 	valid func(s string) (any, bool),
 ) *Field {
-	return section.add(name, ty, false, defaultValue, valid)
+	return section.add(name, ty, defaultValue, valid, nil)
 }
 
 // Add adds a list field of the given name with the given element type to the section.  The name
@@ -327,21 +347,27 @@ func (section *Section) Add(
 //
 // The defaultValue and the value returned by valid must be of the same type, and if a pre-defined
 // type tag is used they must both be slices of the corresponding type.
+//
+// The appender takes a []T and a T and return a []T: the input extended by the additional value.
 func (section *Section) AddList(
 	name string,
 	ty FieldTy,
 	defaultValue any,
 	valid func(s string) (any, bool),
+	append func(any, any) any,
 ) *Field {
-	return section.add(name, ty, true, defaultValue, valid)
+	if append == nil {
+		panic("Invalid nil appender for list field")
+	}
+	return section.add(name, ty, defaultValue, valid, append)
 }
 
 func (section *Section) add(
 	name string,
 	ty FieldTy,
-	isList bool,
 	defaultValue any,
 	valid func(s string) (any, bool),
+	append func(any, any) any,	// iff list type
 ) *Field {
 	if !nameRe.MatchString(name) {
 		panic("Invalid field name " + name)
@@ -352,7 +378,7 @@ func (section *Section) add(
 	if section.fields[name] != nil {
 		panic("Duplicated field name " + name + " in section " + section.name)
 	}
-	f := &Field{section, name, ty, isList, defaultValue, valid}
+	f := &Field{section, name, ty, defaultValue, valid, append}
 	section.fields[name] = f
 	return f
 }
@@ -378,9 +404,9 @@ type Field struct {
 	section      *Section
 	name         string
 	ty           FieldTy
-	isList       bool
 	defaultValue any
 	valid        func(s string) (any, bool)
+	append       func(l, v any) any
 }
 
 // Name returns the field's name.
@@ -470,7 +496,7 @@ func (field *Field) Uint64ListVal(store *Store) []uint64 {
 }
 
 func getListValue[T any](name string, ty FieldTy, field *Field, store *Store) T {
-	if !field.isList {
+	if field.append == nil {
 		panic(name + " list accessor on non-list field")
 	}
 	return getValue[T](name + " list", ty, field, store)
@@ -514,29 +540,13 @@ func (store *Store) set(section *Section, field *Field, val any) {
 	store.ensure(section).values[field.name] = val
 }
 
-// FIXME: This does not make sense with AddList() on user-defined types.
-// For that, we need an appender function that takes []T, T -> []T in the
-// guise of an any, any signature probably.
 func (store *Store) append(section *Section, field *Field, val any) {
 	ss := store.ensure(section)
 	l, ok := ss.values[field.name]
 	if !ok {
 		l = field.defaultValue
 	}
-	switch tval := val.(type) {
-	case bool:
-		ss.values[field.name] = append(l.([]bool), tval)
-	case string:
-		ss.values[field.name] = append(l.([]string), tval)
-	case float64:
-		ss.values[field.name] = append(l.([]float64), tval)
-	case int64:
-		ss.values[field.name] = append(l.([]int64), tval)
-	case uint64:
-		ss.values[field.name] = append(l.([]uint64), tval)
-	default:
-		panic(fmt.Sprintf("Should not happen %s %s", section.name, field.name))
-	}
+	ss.values[field.name] = field.append(l, val)
 }
 
 // Parse parses the input from the reader, returning a [Store] with information about field presence
@@ -604,7 +614,7 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 				return nil, parseFail(
 					lineno, sect.name, "Value '%s' is not valid for field %s", s, m[1])
 			}
-			if field.isList {
+			if field.append != nil {
 				store.append(sect, field, val)
 			} else {
 				store.set(sect, field, val)
