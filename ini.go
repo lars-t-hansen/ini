@@ -22,18 +22,15 @@
 // subject to further expansion.  Expansion takes place before blank and quote stripping and value
 // interpretation, and is not affected by quoting.
 //
-// List values start with '[' and end with ']', and list elements are comma-separated.  A comma is
-// allowed after the last element (thus empty values in the last position must always be quoted).
-// Quotes and spaces around elements are processed as described above.  List values can span
-// multiple lines: while the last nonblank of the value is '[' or comma, the next line is consumed
-// and appended to the value.  Comment and blank lines are skipped also in this case.
+// List values are populated by repeating field settings, one per line.
 //
 // # Usage
 //
 // Create an ini parser with [NewParser] and customize any variables.  Then add a new [Section] to
 // it with [Parser.AddSection].  Add a new [Field] to the section with `Section.Add<Type>()` for
-// pre-defined types, eg [Section.AddString], or the general [Section.Add] for user-defined types or
-// non-standard default values or parsing.
+// pre-defined types, eg [Section.AddString], `Section.Add<Type>List()` for list fields, eg
+// [Section.AddStringList], or the general [Section.Add] and [Section.AddList] for user-defined
+// types or non-standard default values or parsing.
 //
 // Parse an input stream with [Parser.Parse].  This will return a [Store] (or an error).  Access
 // field values via the Field objects on the Store, or directly on the Store itself.
@@ -461,15 +458,15 @@ func (field *Field) StringListVal(store *Store) []string {
 }
 
 func (field *Field) Float64ListVal(store *Store) []float64 {
-	return getListValue[[]float64]("Float64", TyString, field, store)
+	return getListValue[[]float64]("Float64", TyFloat64, field, store)
 }
 
 func (field *Field) Int64ListVal(store *Store) []int64 {
-	return getListValue[[]int64]("Int64", TyString, field, store)
+	return getListValue[[]int64]("Int64", TyInt64, field, store)
 }
 
 func (field *Field) Uint64ListVal(store *Store) []uint64 {
-	return getListValue[[]uint64]("Uint64", TyString, field, store)
+	return getListValue[[]uint64]("Uint64", TyUint64, field, store)
 }
 
 func getListValue[T any](name string, ty FieldTy, field *Field, store *Store) T {
@@ -517,6 +514,31 @@ func (store *Store) set(section *Section, field *Field, val any) {
 	store.ensure(section).values[field.name] = val
 }
 
+// FIXME: This does not make sense with AddList() on user-defined types.
+// For that, we need an appender function that takes []T, T -> []T in the
+// guise of an any, any signature probably.
+func (store *Store) append(section *Section, field *Field, val any) {
+	ss := store.ensure(section)
+	l, ok := ss.values[field.name]
+	if !ok {
+		l = field.defaultValue
+	}
+	switch tval := val.(type) {
+	case bool:
+		ss.values[field.name] = append(l.([]bool), tval)
+	case string:
+		ss.values[field.name] = append(l.([]string), tval)
+	case float64:
+		ss.values[field.name] = append(l.([]float64), tval)
+	case int64:
+		ss.values[field.name] = append(l.([]int64), tval)
+	case uint64:
+		ss.values[field.name] = append(l.([]uint64), tval)
+	default:
+		panic(fmt.Sprintf("Should not happen %s %s", section.name, field.name))
+	}
+}
+
 // Parse parses the input from the reader, returning a [Store] with information about field presence
 // and values.  Errors in field parsing result in a [*ParseError] being returned with no store.
 // Concurrent parsing is safe, but no sections or fields may be added while the parser is in use for
@@ -555,9 +577,6 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 			if field == nil {
 				return nil, parseFail(lineno, sect.name, "No field %s", m[1])
 			}
-			if field.isList {
-				return nil, parseFail(lineno, sect.name, "List fields not supported yet")
-			}
 			s := m[2]
 			if parser.ExpandVars {
 				s = varRe.ReplaceAllStringFunc(s, func(m string) string {
@@ -585,7 +604,11 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 				return nil, parseFail(
 					lineno, sect.name, "Value '%s' is not valid for field %s", s, m[1])
 			}
-			store.set(sect, field, val)
+			if field.isList {
+				store.append(sect, field, val)
+			} else {
+				store.set(sect, field, val)
+			}
 			continue
 		}
 		if sect == nil {

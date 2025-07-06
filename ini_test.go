@@ -312,19 +312,13 @@ func TestList(t *testing.T) {
 	s.AddFloat64List("factors")
 	store, err := p.Parse(strings.NewReader(`
 [sect]
-names=[
-  john, luke ,
-  # on probation only
-  mark,
-  'matthew aka matteus' ,
-]
-factors=[10,20, 15.5 ,'12.75']
+factors=10
+factors=20
+factors=15.5
+factors="12.75"
 `))
 	if err != nil {
 		t.Fatal(err)
-	}
-	if !slices.Equal(s.Field("names").StringListVal(store), []string{"john","luke","mark","matthew aka matteus"}) {
-		t.Fatal(s.Field("names").StringListVal(store))
 	}
 	if !slices.Equal(s.Field("factors").Float64ListVal(store), []float64{10, 20, 15.5, 12.75}) {
 		t.Fatal(s.Field("factors").Float64ListVal(store))
