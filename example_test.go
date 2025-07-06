@@ -27,13 +27,10 @@ verbose = true
 [user]
  name=Frank
 level= 37
-factors = [
-# Initially easy
-10, 20,
-
-# But gradually much harder
-23.5, "38.25",
-]
+factors = 10
+factors = 20
+factors = 23.5
+factors = "38.25"
 `))
 	if err != nil {
 		panic(err)
@@ -46,5 +43,5 @@ factors = [
 	// global.verbose = true
 	// user.name = Frank
 	// user.level = 37
-	// user.factors = [10,20,23.5,38.25]
+	// user.factors = [10 20 23.5 38.25]
 }
