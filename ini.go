@@ -229,7 +229,7 @@ func ParseString(s string) (any, bool) {
 // must not be present in the section and must be syntactically valid (see package comments).
 // ParseString describes the accepted values.
 func (section *Section) AddStringList(name string) *Field {
-	return section.AddList(name, TyString, make([]string, 0),ParseString, AppendString)
+	return section.AddList(name, TyString, make([]string, 0), ParseString, AppendString)
 }
 
 func AppendString(l, v any) any {
@@ -367,7 +367,7 @@ func (section *Section) add(
 	ty FieldTy,
 	defaultValue any,
 	valid func(s string) (any, bool),
-	append func(any, any) any,	// iff list type
+	append func(any, any) any, // iff list type
 ) *Field {
 	if !nameRe.MatchString(name) {
 		panic("Invalid field name " + name)
@@ -499,7 +499,7 @@ func getListValue[T any](name string, ty FieldTy, field *Field, store *Store) T 
 	if field.append == nil {
 		panic(name + " list accessor on non-list field")
 	}
-	return getValue[T](name + " list", ty, field, store)
+	return getValue[T](name+" list", ty, field, store)
 }
 
 // A Store holds the result of a successful parse.  It is passed as an argument to methods on
@@ -561,19 +561,14 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 	store := &Store{
 		sections: make(map[string]*sectStore),
 	}
-	scanner := bufio.NewScanner(r)
-	var lineno int
+	scanner := newLineScanner(r, blankRe)
 	var sect *Section
-	for scanner.Scan() {
-		l := scanner.Text()
-		lineno++
-		if blankRe.MatchString(l) {
-			continue
-		}
+	for scanner.scan() {
+		l := scanner.text()
 		if m := sectionRe.FindStringSubmatch(l); m != nil {
 			probe := parser.sections[m[1]]
 			if probe == nil {
-				return nil, parseFail(lineno, "", "Undefined section %s", m[1])
+				return nil, parseFail(scanner.lineno, "", "Undefined section %s", m[1])
 			}
 			sect = probe
 			store.ensure(sect)
@@ -581,11 +576,11 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 		}
 		if m := valRe.FindStringSubmatch(l); m != nil {
 			if sect == nil {
-				return nil, parseFail(lineno, "", "Setting %s outside section", m[1])
+				return nil, parseFail(scanner.lineno, "", "Setting %s outside section", m[1])
 			}
 			field := sect.fields[m[1]]
 			if field == nil {
-				return nil, parseFail(lineno, sect.name, "No field %s", m[1])
+				return nil, parseFail(scanner.lineno, sect.name, "No field %s", m[1])
 			}
 			s := m[2]
 			if parser.ExpandVars {
@@ -603,6 +598,13 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 				})
 			}
 			s = strings.TrimSpace(s)
+			if field.append != nil && strings.HasPrefix(s, "[") {
+				// TODO: While the end of the value after blank stripping is '[', ',', get another
+				// nonblank line and append it, unless it is a section header.  It is then an error
+				// if the completed stripped line does not end with ']'.  The lines thus read are
+				// subject to variable expansion and blank stripping, but quote stripping is more
+				// complicated because there may be multiple quoted values on the line.
+			}
 			if parser.QuoteChar != 0 {
 				c := string(parser.QuoteChar)
 				if strings.HasPrefix(s, c) && strings.HasSuffix(s, c) {
@@ -612,7 +614,7 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 			val, valid := field.valid(s)
 			if !valid {
 				return nil, parseFail(
-					lineno, sect.name, "Value '%s' is not valid for field %s", s, m[1])
+					scanner.lineno, sect.name, "Value '%s' is not valid for field %s", s, m[1])
 			}
 			if field.append != nil {
 				store.append(sect, field, val)
@@ -622,13 +624,70 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 			continue
 		}
 		if sect == nil {
-			return nil, parseFail(lineno, "", "Invalid syntax before first section")
+			return nil, parseFail(scanner.lineno, "", "Invalid syntax before first section")
 		}
-		return nil, parseFail(lineno, sect.name, "Invalid syntax")
+		return nil, parseFail(scanner.lineno, sect.name, "Invalid syntax")
 	}
-	if err := scanner.Err(); err != nil {
-		return nil, parseFail(lineno, "", "I/O error: "+err.Error())
+	if err := scanner.err(); err != nil {
+		return nil, parseFail(scanner.lineno, "", "I/O error: "+err.Error())
 	}
 
 	return store, nil
+}
+
+type lineScanner struct {
+	scanner *bufio.Scanner
+	blankRe *regexp.Regexp
+	lineno  int
+	curr    string
+	full    bool
+}
+
+func newLineScanner(r io.Reader, blankRe *regexp.Regexp) lineScanner {
+	return lineScanner{
+		scanner: bufio.NewScanner(r),
+		blankRe: blankRe,
+	}
+}
+
+func (ls *lineScanner) scan() bool {
+	if ls.full {
+		return true
+	}
+	for {
+		flag := ls.scanner.Scan()
+		if !flag {
+			return false
+		}
+		ls.lineno++
+		s := ls.scanner.Text()
+		if !ls.blankRe.MatchString(s) {
+			ls.curr = s
+			ls.full = true
+			return true
+		}
+	}
+}
+
+func (ls *lineScanner) peek() (string, bool) {
+	if !ls.full {
+		if !ls.scan() {
+			return "", false
+		}
+	}
+	return ls.curr, true
+}
+
+func (ls *lineScanner) text() (s string) {
+	if !ls.full {
+		panic("Read on empty scanner")
+	}
+	s = ls.curr
+	ls.full = false
+	ls.curr = ""
+	return
+}
+
+func (ls *lineScanner) err() error {
+	return ls.scanner.Err()
 }
