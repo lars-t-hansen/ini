@@ -583,27 +583,16 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 				return nil, parseFail(scanner.lineno, sect.name, "No field %s", m[1])
 			}
 			s := m[2]
-			if parser.ExpandVars {
-				s = varRe.ReplaceAllStringFunc(s, func(m string) string {
-					if m == "$$" {
-						return "$"
-					}
-					var name string
-					if m[1] == '{' {
-						name = m[2 : len(m)-1]
-					} else {
-						name = m[1:]
-					}
-					return os.Getenv(name)
-				})
-			}
+			s = parser.maybeExpandVars(s)
 			s = strings.TrimSpace(s)
 			if field.append != nil && strings.HasPrefix(s, "[") {
-				// TODO: While the end of the value after blank stripping is '[', ',', get another
+				// TODO: While the end of the value after blank stripping is '[' or ',', get another
 				// nonblank line and append it, unless it is a section header.  It is then an error
 				// if the completed stripped line does not end with ']'.  The lines thus read are
 				// subject to variable expansion and blank stripping, but quote stripping is more
-				// complicated because there may be multiple quoted values on the line.
+				// complicated because there may be multiple quoted values on the line. Expansion
+				// must happen after the section header test but before we test whether the line is
+				// continued on the next.
 			}
 			if parser.QuoteChar != 0 {
 				c := string(parser.QuoteChar)
@@ -633,6 +622,24 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 	}
 
 	return store, nil
+}
+
+func (parser *Parser) maybeExpandVars(s string) string {
+	if parser.ExpandVars {
+		s = varRe.ReplaceAllStringFunc(s, func(m string) string {
+			if m == "$$" {
+				return "$"
+			}
+			var name string
+			if m[1] == '{' {
+				name = m[2 : len(m)-1]
+			} else {
+				name = m[1:]
+			}
+			return os.Getenv(name)
+		})
+	}
+	return s
 }
 
 type lineScanner struct {
