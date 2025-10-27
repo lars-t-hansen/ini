@@ -4,7 +4,7 @@
 //
 // An ini file is line oriented.  It has a number of sections, each starting with a `[section-name]`
 // header.  Within each section is a sequence of field settings, each on the form name=value.
-// Blank lines are ignored.  Lines whose first nonblank is CommentChar (default `#`) are ignored.
+// Blank lines are skipped.  Lines whose first nonblank is CommentChar (default `#`) are skipped.
 // There can be blanks at the beginning and end of all lines and on either side of the `=`, and
 // inside the brackets of the header. Section and field names must conform to `[-a-zA-Z0-9_$]+`, and
 // are case-sensitive.
@@ -336,61 +336,41 @@ func (field *Field) Present(store *Store) bool {
 // BoolVal returns a boolean field's value in the input, or the default if the field was not
 // present.
 func (field *Field) BoolVal(store *Store) bool {
-	if field.ty != TyBool {
-		panic("Bool accessor on non-bool field")
-	}
-	if v, found := store.lookupVal(field.section, field); found {
-		return v.(bool)
-	}
-	return field.defaultValue.(bool)
+	return getValue[bool]("Bool", TyBool, field, store)
 }
 
 // StringVal returns a string field's value in the input, or the default if the field was not
 // present.
 func (field *Field) StringVal(store *Store) string {
-	if field.ty != TyString {
-		panic("String accessor on non-string field")
-	}
-	if v, found := store.lookupVal(field.section, field); found {
-		return v.(string)
-	}
-	return field.defaultValue.(string)
+	return getValue[string]("String", TyString, field, store)
 }
 
 // Float64Val returns a float64 field's value in the input, or the default if the field was not
 // present.
 func (field *Field) Float64Val(store *Store) float64 {
-	if field.ty != TyFloat64 {
-		panic("Float64 accessor on non-float64 field")
-	}
-	if v, found := store.lookupVal(field.section, field); found {
-		return v.(float64)
-	}
-	return field.defaultValue.(float64)
+	return getValue[float64]("Float64", TyFloat64, field, store)
 }
 
 // Int64Val returns an int64 field's value in the input, or the default if the field was not
 // present.
 func (field *Field) Int64Val(store *Store) int64 {
-	if field.ty != TyInt64 {
-		panic("Int64 accessor on non-int64 field")
-	}
-	if v, found := store.lookupVal(field.section, field); found {
-		return v.(int64)
-	}
-	return field.defaultValue.(int64)
+	return getValue[int64]("Int64", TyInt64, field, store)
 }
 
 // Uint64Val returns an uint64 field's value in the input, or the default if the field was not
 // present.
 func (field *Field) Uint64Val(store *Store) uint64 {
-	if field.ty != TyUint64 {
-		panic("Uint64 accessor on non-uint64 field")
+	return getValue[uint64]("Uint64", TyUint64, field, store)
+}
+
+func getValue[T any](name string, ty FieldTy, field *Field, store *Store) T {
+	if field.ty != ty {
+		panic(name + " accessor on differently typed field")
 	}
 	if v, found := store.lookupVal(field.section, field); found {
-		return v.(uint64)
+		return v.(T)
 	}
-	return field.defaultValue.(uint64)
+	return field.defaultValue.(T)
 }
 
 // Value returns field's value in the input as an any, or the default value if the field was not

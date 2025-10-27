@@ -6,8 +6,8 @@ Package ini implements a generic, simple ini file parser.
 
 An ini file is line oriented. It has a number of sections, each starting with a
 `[section-name]` header. Within each section is a sequence of field settings,
-each on the form name=value. Blank lines are ignored. Lines whose first nonblank
-is CommentChar (default `#`) are ignored. There can be blanks at the beginning
+each on the form name=value. Blank lines are skipped. Lines whose first nonblank
+is CommentChar (default `#`) are skipped. There can be blanks at the beginning
 and end of all lines and on either side of the `=`, and inside the brackets of
 the header. Section and field names must conform to `[-a-zA-Z0-9_$]+`, and are
 case-sensitive.
