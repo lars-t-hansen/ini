@@ -52,6 +52,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 var (
@@ -583,32 +584,36 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 				return nil, parseFail(scanner.lineno, sect.name, "No field %s", m[1])
 			}
 			s := m[2]
-			s = parser.maybeExpandVars(s)
-			s = strings.TrimSpace(s)
-			if field.append != nil && strings.HasPrefix(s, "[") {
-				// TODO: While the end of the value after blank stripping is '[' or ',', get another
-				// nonblank line and append it, unless it is a section header.  It is then an error
-				// if the completed stripped line does not end with ']'.  The lines thus read are
-				// subject to variable expansion and blank stripping, but quote stripping is more
-				// complicated because there may be multiple quoted values on the line. Expansion
-				// must happen after the section header test but before we test whether the line is
-				// continued on the next.
-			}
-			if parser.QuoteChar != 0 {
-				c := string(parser.QuoteChar)
-				if strings.HasPrefix(s, c) && strings.HasSuffix(s, c) {
-					s = strings.TrimSuffix(strings.TrimPrefix(s, c), c)
+			if field.append == nil {
+				s = parser.maybeExpandVars(s)
+				val, rest, err := parser.parseValue(s)
+				if rest != nil {
+					return nil, parseFail(scanner.lineno, ..., "Junk after value")
 				}
-			}
-			val, valid := field.valid(s)
-			if !valid {
-				return nil, parseFail(
-					scanner.lineno, sect.name, "Value '%s' is not valid for field %s", s, m[1])
-			}
-			if field.append != nil {
-				store.append(sect, field, val)
-			} else {
 				store.set(sect, field, val)
+			} else {
+				s = strings.TrimLeftFunc(s, unicode.IsSpace)
+				if strings.HasPrefix(s, "[") {
+					s = parser.maybeExpandVars(s)
+					s = strings.TrimSpace(s)
+					for s[len(s)-1] == '[' || s[len(s)-1] == ',' {
+						s = s + " "
+						if !scanner.scan() {
+							break
+						}
+						l := scanner.text()
+						if sectionRe.MatchString(l) {
+							break
+						}
+						l = parser.maybeExpandVars(l)
+						l = strings.TrimSpace(l)
+						s += l
+					}
+					// FIXME
+				} else {
+					// FIXME: as for one value
+					store.append(sect, field, val)
+				}
 			}
 			continue
 		}
@@ -622,6 +627,23 @@ func (parser *Parser) Parse(r io.Reader) (*Store, error) {
 	}
 
 	return store, nil
+}
+
+func (parser *Parser) parseValue(s string) (any, string, error) {
+	// FIXME: This is too simple
+	s = strings.TrimSpace(s)
+	if parser.QuoteChar != 0 {
+		c := string(parser.QuoteChar)
+		if strings.HasPrefix(s, c) && strings.HasSuffix(s, c) {
+			s = strings.TrimSuffix(strings.TrimPrefix(s, c), c)
+		}
+	}
+	val, valid := field.valid(s)
+	if !valid {
+		return nil, "", parseFail(
+			scanner.lineno, sect.name, "Value '%s' is not valid for field %s", s, m[1])
+	}
+	return val, "", nil
 }
 
 func (parser *Parser) maybeExpandVars(s string) string {
